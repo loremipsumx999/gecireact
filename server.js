@@ -63,6 +63,61 @@ app.post("/logUser", async (req, res) => {
     }
 });
 
+app.put("/updateUser", async (req, res) => {
+    const { token } = req.headers.authorization;
+    if (!token) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+  
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+  
+      const { username, newPassword } = req.body;
+  
+      const [users] = await db.query("SELECT * FROM users WHERE id = ?", [decoded.id]);
+      if (users.length === 0) {
+        return res.status(400).json({ message: "User not found" });
+      }
+  
+      const user = users[0];
+  
+      const hashedPassword = newPassword ? await argon.hash(newPassword) : user.password;
+  
+      await db.query("UPDATE users SET username = ?, password = ?, phone_number = ?, address =? WHERE id = ?", [username || user.username, hashedPassword, phone_number, address, decoded.id]);
+      res.json({ message: "Profile updated successfully" });
+    } catch (err) {
+      console.error("Error updating profile:", err);
+      res.status(500).json({ message: "Error updating profile" });
+    }
+});
+
+app.get("/user", async (req, res) => {
+    const { authorization } = req.headers;
+
+    if (!authorization) {
+        return res.status(401).json({ message: "Unauthorized: No token provided." });
+    }
+
+    const token = authorization.split(" ")[1];
+    if (!token) {
+        return res.status(401).json({ message: "Unauthorized: Invalid token format." });
+    }
+
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const [users] = await db.query("SELECT id, username FROM users WHERE id = ?", [decoded.id]);
+
+        if (users.length === 0) {
+            return res.status(404).json({ message: "User not found." });
+        }
+
+        res.json({ id: users[0].id, username: users[0].username });
+    } catch (err) {
+        console.error("Error in /user route:", err);
+        res.status(401).json({ message: "Unauthorized: Invalid token." });
+    }
+});
+
 app.listen(port, () =>{
     console.log(`Server is running on port ${port}`);
 })
